@@ -1,0 +1,4 @@
+[workspace]
+members = ["crypto", "da-node"]
+
+resolver = "3"
