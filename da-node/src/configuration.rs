@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use config::{Config, Environment, File as ConfigFile};
-use secrecy::SecretString;
 
 #[derive(Parser, Debug)]
 #[clap(version, about, author)]
@@ -32,7 +31,12 @@ pub struct ServerSettings {
     pub database_url: String,
     #[serde(default)]
     pub server_endpoint: String,
-    pub jwt_secret: SecretString,
+    pub jwt_secret: secrecy::SecretString,
+
+    pub node_id: String,
+    pub p2p_listen_addr: String,
+    pub p2p_peers: Vec<String>,
+    pub p2p_sync_interval_secs: u64,
 }
 
 pub fn get_configuration() -> Result<ServerSettings, DANodeError> {
@@ -56,7 +60,7 @@ pub fn get_configuration() -> Result<ServerSettings, DANodeError> {
 
     let base_settings: ServerSettings = config_builder.build()?.try_deserialize()?;
 
-    let jwt_secret: SecretString = if let Some(secret) = cli_args.jwt_secret {
+    let jwt_secret: secrecy::SecretString = if let Some(secret) = cli_args.jwt_secret {
         secret.into()
     } else {
         base_settings.jwt_secret
@@ -68,6 +72,10 @@ pub fn get_configuration() -> Result<ServerSettings, DANodeError> {
             .server_endpoint
             .unwrap_or(base_settings.server_endpoint),
         jwt_secret,
+        node_id: base_settings.node_id,
+        p2p_listen_addr: base_settings.p2p_listen_addr,
+        p2p_peers: base_settings.p2p_peers,
+        p2p_sync_interval_secs: base_settings.p2p_sync_interval_secs,
     };
 
     Ok(settings)

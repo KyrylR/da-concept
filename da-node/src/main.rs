@@ -1,6 +1,7 @@
 mod configuration;
 mod errors;
 mod logger;
+mod node_api;
 mod user_api;
 
 use crate::configuration::get_configuration;

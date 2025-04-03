@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package p2p.sync;
+
+enum SyncStatus {
+  UNSPECIFIED = 0;
+  SUCCESS = 1;
+  ERROR = 2;
+  NOT_FOUND = 3;
+  ALREADY_EXISTS = 4;
+  UNAUTHORIZED = 5;
+}
+
+message BlobMetadata {
+  string id = 1;
+  string hash = 2;
+  optional string content_type = 3;
+  int32 size = 4;
+  string owner_id = 5;
+  optional string metadata = 6;
+  string created_at = 7;
+  optional string deleted_at = 8;
+}
+
+message Blob {
+  BlobMetadata metadata = 1;
+  bytes content = 2;
+}
+
+message SyncRequest {
+  oneof request_type {
+    AnnounceBlobRequest announce = 1;
+    FetchBlobRequest fetch = 2;
+    DeleteBlobRequest delete = 3;
+    SyncStatusRequest status = 4;
+    NodeInfoRequest node_info = 5;
+  }
+}
+
+message SyncResponse {
+  SyncStatus status = 1;
+  string message = 2;
+  oneof response_data {
+    AnnounceBlobResponse announce = 3;
+    FetchBlobResponse fetch = 4;
+    DeleteBlobResponse delete = 5;
+    SyncStatusResponse status_resp = 6;
+    NodeInfoResponse node_info = 7;
+  }
+}
+
+// Announce a new blob to peers
+message AnnounceBlobRequest {
+  BlobMetadata metadata = 1;
+}
+
+message AnnounceBlobResponse {
+  bool accepted = 1;
+}
+
+// Request to fetch a blob from peers
+message FetchBlobRequest {
+  string blob_id = 1;
+  bool include_content = 2;
+}
+
+message FetchBlobResponse {
+  optional Blob blob = 1;
+}
+
+// Request to delete a blob
+message DeleteBlobRequest {
+  string blob_id = 1;
+}
+
+message DeleteBlobResponse {
+  bool deleted = 1;
+}
+
+// Check sync status of a blob
+message SyncStatusRequest {
+  string blob_id = 1;
+}
+
+message SyncStatusResponse {
+  repeated PeerSyncStatus peer_statuses = 1;
+}
+
+message PeerSyncStatus {
+  string peer_id = 1;
+  string blob_id = 2;
+  string status = 3;
+  optional string last_sync_attempt = 4;
+  optional string last_successful_sync = 5;
+}
+
+// Get node information
+message NodeInfoRequest {}
+
+message NodeInfoResponse {
+  string node_id = 1;
+  int32 blob_count = 2;
+  int64 storage_used = 3;
+  repeated string capabilities = 4;
+}
+
+service SyncService {
+  rpc Sync(SyncRequest) returns (SyncResponse) {}
+  rpc SyncStream(stream SyncRequest) returns (stream SyncResponse) {}
+}

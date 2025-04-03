@@ -2,6 +2,7 @@ pub mod context;
 pub mod data_loader;
 pub mod types;
 
+use crate::node_api::sync_blob;
 use crate::user_api::context::Context;
 use crate::user_api::types::{
     AuthPayload, Blob, BlobIdInput, BlobInput, BlobSchema, Claims, LoginInput, NewUserInput, User,
@@ -159,9 +160,13 @@ impl Mutation {
         .fetch_one(context.pool())
         .await?;
 
-        // TODO
-        // Trigger blob sync in the p2p network - this would be implemented elsewhere
-        // sync_blob_to_network(&blob_id, context).await?;
+        sync_blob(
+            context.sync_manager(),
+            blob.id.to_string().clone(),
+            blob.hash.clone().unwrap_or_default(),
+        )
+        .await
+        .map_err(|e| format!("Failed to sync blob: {}", e))?;
 
         Ok(BlobSchema::new(blob))
     }
@@ -188,9 +193,13 @@ impl Mutation {
             .execute(context.pool())
             .await?;
 
-        // TODO
-        // Trigger blob sync in the p2p network - this would be implemented elsewhere
-        // sync_blob_to_network(&blob_id, context).await?;
+        sync_blob(
+            context.sync_manager(),
+            blob.id.to_string(),
+            blob.hash.unwrap_or_default(),
+        )
+        .await
+        .map_err(|e| format!("Failed to sync blob: {}", e))?;
 
         sqlx::query(
             "INSERT INTO sync_status (blob_id, peer_node_id, sync_status)
