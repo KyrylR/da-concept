@@ -283,7 +283,7 @@ impl SyncService for SyncServiceImpl {
         let mut stream = request.into_inner();
 
         tokio::spawn(async move {
-            while let Some(req) = stream.message().await.unwrap_or(None) {
+            while let Some(_) = stream.message().await.unwrap_or(None) {
                 tx.send(Ok(SyncResponse {
                     status: SyncStatus::Error as i32,
                     message: "Stream sync not implemented".to_string(),

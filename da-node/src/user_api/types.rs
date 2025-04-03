@@ -12,6 +12,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, sqlx::FromRow)]
+#[allow(dead_code)]
 pub struct User {
     pub id: Uuid,
     pub username: String,
@@ -22,6 +23,7 @@ pub struct User {
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
+#[allow(dead_code)]
 pub struct Blob {
     pub id: Uuid,
     pub content: Vec<u8>,
