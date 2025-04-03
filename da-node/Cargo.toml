@@ -4,3 +4,30 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+config = "0.15.9"
+serde = { version = "1.0.219", features = ["derive"] }
+tokio = { version = "1.44.0", features = ["macros", "rt-multi-thread"] }
+
+uuid= { version= "1", features = ["v4"] }
+chrono = { version= "0.4.22", default-features = false, features = ["clock"] }
+
+time = { version = "0.3.39", features = ["serde-well-known"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "time"] }
+tracing-bunyan-formatter = "0.3.10"
+tracing-log = "0.2.0"
+secrecy = { version = "0.10.3", features = ["serde"] }
+tracing-actix-web = "0.7.16"
+unicode-segmentation = "1.12.0"
+validator = "0.20.0"
+clap = { version = "4.5.29", features = ["derive", "env"] }
+thiserror = "2.0.12"
+dotenvy = "0.15.7"
+
+[dev-dependencies]
+rand = "0.9.0"
+fake = "4.2.0"
+quickcheck = "1.0.3"
+quickcheck_macros = "1.0.0"
+claims = "0.8.0"
+reqwest = "0.12.13"
