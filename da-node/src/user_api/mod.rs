@@ -18,7 +18,6 @@ use base64::Engine;
 use base64::engine::general_purpose;
 
 use chrono::{Duration, Utc};
-use clap::builder::Str;
 use jsonwebtoken::{EncodingKey, Header, encode as encodeJWT};
 use juniper::{EmptySubscription, FieldResult, graphql_object};
 use secrecy::ExposeSecret;

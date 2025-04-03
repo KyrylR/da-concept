@@ -20,7 +20,11 @@ pub struct Context {
 impl juniper::Context for Context {}
 
 impl Context {
-    pub fn new(db: Pool<Sqlite>, jwt_secret: secrecy::SecretString, p2p: Arc<RwLock<SyncManager>>) -> Self {
+    pub fn new(
+        db: Pool<Sqlite>,
+        jwt_secret: secrecy::SecretString,
+        p2p: Arc<RwLock<SyncManager>>,
+    ) -> Self {
         let user_loader = UserLoader::new(UserBatcher { pool: db.clone() }).with_yield_count(100);
         let blob_loader = BlobLoader::new(BlobBatcher { pool: db.clone() }).with_yield_count(100);
 

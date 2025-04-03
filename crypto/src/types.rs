@@ -4,18 +4,18 @@ use num_bigint::BigUint;
 #[derive(Debug, Clone)]
 pub struct PublicKey {
     /// Large prime number
-    pub p: BigUint,
+    pub prime: BigUint,
     /// Generator of the multiplicative group
-    pub g: BigUint,
+    pub generator: BigUint,
     /// g^x mod p, where x is the private key
-    pub h: BigUint,
+    pub public_exponent: BigUint,
 }
 
 /// ElGamal private key
 #[derive(Debug, Clone)]
 pub struct PrivateKey {
     /// Secret exponent
-    pub x: BigUint,
+    pub private_key: BigUint,
     /// Associated public key
     pub public_key: PublicKey,
 }

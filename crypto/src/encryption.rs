@@ -285,7 +285,9 @@ mod tests {
         if encrypted.len() > 10 {
             encrypted[10] ^= 0xFF; // Flip all bits at position 10
 
-            if let Ok(decrypted) = decrypt(encrypted, private_key) { assert_ne!("Important data", decrypted) }
+            if let Ok(decrypted) = decrypt(encrypted, private_key) {
+                assert_ne!("Important data", decrypted)
+            }
         }
     }
 

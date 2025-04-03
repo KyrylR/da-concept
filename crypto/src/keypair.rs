@@ -6,7 +6,10 @@ use std::ops::Rem;
 use num_bigint::BigUint;
 use num_traits::One;
 
-use tracing::{error, trace};
+use tracing::{debug, error};
+
+const PRIME: &[u8] =
+    b"21888242871839275222246405745257275088696311157297823662689037894645226208583";
 
 pub fn get_secure_random_bytes() -> [u8; 32] {
     ring::rand::generate(&ring::rand::SystemRandom::new())
@@ -17,44 +20,38 @@ pub fn get_secure_random_bytes() -> [u8; 32] {
 impl PrivateKey {
     /// Generate a new ElGamal keypair
     pub fn generate(bits: usize) -> Self {
-        trace!("Generating new ElGamal keypair with {} bits", bits);
+        debug!("Generating new ElGamal keypair with {} bits", bits);
 
-        let p = BigUint::parse_bytes(
-            b"21888242871839275222246405745257275088696311157297823662689037894645226208583",
-            10,
-        )
-        .expect("Unable to parse BigUint");
-
-        let g = BigUint::from(2u32);
+        let prime = BigUint::parse_bytes(PRIME, 10).expect("Unable to parse BigUint");
 
         let random_biguint = BigUint::from_bytes_be(&get_secure_random_bytes());
+        let private_key = random_biguint % (&prime - BigUint::one());
 
-        let x = random_biguint % (&p - BigUint::one());
+        let generator = BigUint::from(2u32);
+        let public_exponent = generator.modpow(&private_key, &prime);
 
-        let h = g.modpow(&x, &p);
+        let public_key = PublicKey { prime, generator, public_exponent };
 
-        let public_key = PublicKey { p, g, h };
+        debug!("ElGamal keypair generated successfully");
 
-        trace!("ElGamal keypair generated successfully");
-
-        PrivateKey { x, public_key }
+        PrivateKey { private_key, public_key }
     }
 
     /// Decrypt an ElGamal ciphertext
     pub fn decrypt(&self, ciphertext: &Ciphertext) -> Result<BigUint, CryptoError> {
-        trace!("Decrypting ElGamal ciphertext");
+        debug!("Decrypting ElGamal ciphertext");
 
         // Compute s = c1^x mod p
-        let s = ciphertext.c1.modpow(&self.x, &self.public_key.p);
+        let s = ciphertext.c1.modpow(&self.private_key, &self.public_key.prime);
 
         // Compute s^(-1) mod p
         let s_inv = s.modpow(
-            &(self.public_key.p.clone() - BigUint::from(2u32)),
-            &self.public_key.p,
+            &(self.public_key.prime.clone() - BigUint::from(2u32)),
+            &self.public_key.prime,
         );
 
         // Recover message m = c2 * s^(-1) mod p
-        let m = (ciphertext.c2.clone() * s_inv).rem(&self.public_key.p);
+        let m = (ciphertext.c2.clone() * s_inv).rem(&self.public_key.prime);
 
         Ok(m)
     }
@@ -63,25 +60,25 @@ impl PrivateKey {
 impl PublicKey {
     /// Encrypt a message using ElGamal encryption
     pub fn encrypt(&self, message: &BigUint) -> Result<Ciphertext, CryptoError> {
-        if message >= &self.p {
+        if message >= &self.prime {
             error!("Message is too large: {}", message);
             return Err(CryptoError::InvalidCiphertext);
         }
 
-        trace!("Encrypting message with ElGamal");
+        debug!("Encrypting message with ElGamal");
 
         let random_biguint = BigUint::from_bytes_be(&get_secure_random_bytes());
 
-        let y = random_biguint % (&self.p - BigUint::one());
+        let y = random_biguint % (&self.prime - BigUint::one());
 
         // Compute c1 = g^y mod p
-        let c1 = self.g.modpow(&y, &self.p);
+        let c1 = self.generator.modpow(&y, &self.prime);
 
         // Compute s = h^y mod p
-        let s = self.h.modpow(&y, &self.p);
+        let s = self.public_exponent.modpow(&y, &self.prime);
 
         // Compute c2 = m * s mod p
-        let c2 = (message * s).rem(&self.p);
+        let c2 = (message * s).rem(&self.prime);
 
         Ok(Ciphertext { c1, c2 })
     }
@@ -112,15 +109,15 @@ mod tests {
         let private_key = PrivateKey::generate(512);
 
         assert_eq!(
-            private_key.public_key.h,
+            private_key.public_key.public_exponent,
             private_key
                 .public_key
-                .g
-                .modpow(&private_key.x, &private_key.public_key.p)
+                .generator
+                .modpow(&private_key.private_key, &private_key.public_key.prime)
         );
 
-        assert!(private_key.x > BigUint::zero());
-        assert!(private_key.x < private_key.public_key.p.clone() - BigUint::one());
+        assert!(private_key.private_key > BigUint::zero());
+        assert!(private_key.private_key < private_key.public_key.prime.clone() - BigUint::one());
     }
 
     #[test]
@@ -142,7 +139,7 @@ mod tests {
         let private_key = PrivateKey::generate(512);
         let public_key = private_key.public_key.clone();
 
-        let message = public_key.p.clone() + BigUint::one();
+        let message = public_key.prime.clone() + BigUint::one();
         let result = public_key.encrypt(&message);
 
         assert!(result.is_err());
@@ -168,7 +165,7 @@ mod tests {
 
         let message_biguint = BigUint::from(message);
 
-        if message_biguint >= public_key.p {
+        if message_biguint >= public_key.prime {
             return TestResult::discard();
         }
 

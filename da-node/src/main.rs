@@ -32,10 +32,7 @@ async fn main() -> anyhow::Result<()> {
     };
     let application = Application::build(configuration.clone()).await?;
 
-    info!(
-        "Starting GraphQL server on {}",
-        application.graphql_port(),
-    );
+    info!(port=application.graphql_port(), "Starting GraphQL server.");
 
     let application_task = tokio::spawn(application.run_until_stopped());
 
