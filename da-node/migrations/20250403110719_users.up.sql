@@ -1,7 +1,7 @@
 -- Add up migration script here
 CREATE TABLE users
 (
-    id            TEXT PRIMARY KEY CHECK (length(id) = 36),
+    id            TEXT PRIMARY KEY,
     username      TEXT      NOT NULL UNIQUE,
     password_hash TEXT      NOT NULL,
     email         TEXT UNIQUE,

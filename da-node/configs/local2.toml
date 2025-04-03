@@ -1,0 +1,10 @@
+database_url = "sqlite://db/node2.sqlite"
+client_server_endpoint = "127.0.0.1:8012"
+
+[p2p_config]
+node_id = "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+listen_addr = "127.0.0.1:50053"
+peers = []
+sync_interval_secs = 30
+max_concurrent_syncs = 10
+max_blob_size = 20971520

@@ -3,12 +3,12 @@
 -- Create blobs table
 CREATE TABLE blobs
 (
-    id           TEXT PRIMARY KEY CHECK (length(id) = 36), -- UUIDv4 as text
+    id           TEXT PRIMARY KEY,
     content      BLOB      NOT NULL,
-    metadata     TEXT,                                     -- Can be used to store JSON or other metadata
+    metadata     TEXT,
     content_type TEXT,
     size         INTEGER   NOT NULL,
-    hash         TEXT,                                     -- For integrity verification
+    hash         TEXT, -- For integrity verification
     owner_id     TEXT      NOT NULL,
     created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

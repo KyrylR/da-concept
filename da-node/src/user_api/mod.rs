@@ -18,10 +18,10 @@ use base64::Engine;
 use base64::engine::general_purpose;
 
 use chrono::{Duration, Utc};
-
+use clap::builder::Str;
 use jsonwebtoken::{EncodingKey, Header, encode as encodeJWT};
 use juniper::{EmptySubscription, FieldResult, graphql_object};
-
+use secrecy::ExposeSecret;
 use sha2::{Digest, Sha256};
 
 use uuid::Uuid;
@@ -124,7 +124,7 @@ impl Mutation {
         let token = encodeJWT(
             &Header::default(),
             &claims,
-            &EncodingKey::from_secret(context.jwt_secret().as_bytes()),
+            &EncodingKey::from_secret(context.jwt_secret().expose_secret().as_bytes()),
         )?;
 
         Ok(AuthPayload {

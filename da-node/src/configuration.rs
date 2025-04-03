@@ -1,8 +1,10 @@
 use crate::errors::DANodeError;
+use crate::node_api::config::P2PConfig;
 
 use std::path::PathBuf;
 
 use clap::Parser;
+
 use config::{Config, Environment, File as ConfigFile};
 
 #[derive(Parser, Debug)]
@@ -12,9 +14,9 @@ pub struct CliSettings {
     #[clap(long, short = 'D', env)]
     pub database_url: Option<String>,
 
-    /// URL of the server to connect to, by default will be read from the SERVER_URL env var or `.env` files.
-    #[clap(long, short = 'S', env)]
-    pub server_endpoint: Option<String>,
+    /// URL of the client server to connect to, by default will be read from the CLIENT_SERVER_ENDPOINT env var or `.env` files.
+    #[clap(long, short = 'C', env)]
+    pub client_server_endpoint: Option<String>,
 
     /// JWT Server secret
     #[clap(long, short = 'J', env)]
@@ -30,19 +32,15 @@ pub struct ServerSettings {
     #[serde(default)]
     pub database_url: String,
     #[serde(default)]
-    pub server_endpoint: String,
+    pub client_server_endpoint: String,
+    #[serde(default)]
     pub jwt_secret: secrecy::SecretString,
-
-    pub node_id: String,
-    pub p2p_listen_addr: String,
-    pub p2p_peers: Vec<String>,
-    pub p2p_sync_interval_secs: u64,
+    #[serde(default)]
+    pub p2p_config: P2PConfig,
 }
 
 pub fn get_configuration() -> Result<ServerSettings, DANodeError> {
-    let Ok(_) = dotenvy::dotenv() else {
-        return Err(DANodeError::ReadEnvVar);
-    };
+    dotenvy::dotenv()?;
     let cli_args = CliSettings::parse();
 
     let config_path = std::env::var_os("CONF_FILE")
@@ -68,14 +66,11 @@ pub fn get_configuration() -> Result<ServerSettings, DANodeError> {
 
     let settings = ServerSettings {
         database_url: cli_args.database_url.unwrap_or(base_settings.database_url),
-        server_endpoint: cli_args
-            .server_endpoint
-            .unwrap_or(base_settings.server_endpoint),
+        client_server_endpoint: cli_args
+            .client_server_endpoint
+            .unwrap_or(base_settings.client_server_endpoint),
         jwt_secret,
-        node_id: base_settings.node_id,
-        p2p_listen_addr: base_settings.p2p_listen_addr,
-        p2p_peers: base_settings.p2p_peers,
-        p2p_sync_interval_secs: base_settings.p2p_sync_interval_secs,
+        p2p_config: base_settings.p2p_config,
     };
 
     Ok(settings)

@@ -24,7 +24,7 @@ pub struct User {
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct Blob {
     pub id: Uuid,
-    pub content: String,
+    pub content: Vec<u8>,
     pub metadata: Option<String>,
     pub content_type: Option<String>,
     pub size: i32,

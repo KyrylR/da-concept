@@ -115,7 +115,7 @@ impl SyncServiceImpl {
         let proto_blob = if request.include_content {
             crate::node_api::proto::Blob {
                 metadata: Some(proto_metadata),
-                content: blob.content.into_bytes(),
+                content: blob.content,
             }
         } else {
             crate::node_api::proto::Blob {

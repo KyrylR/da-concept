@@ -1,9 +1,9 @@
 use crate::node_api::sync::SyncManager;
 use crate::user_api::data_loader::{BlobBatcher, BlobLoader, UserBatcher, UserLoader};
 use crate::user_api::types::User;
+
 use std::sync::Arc;
 
-use crate::node_api::config::P2PConfig;
 use sqlx::{Pool, Sqlite};
 use tokio::sync::RwLock;
 
@@ -14,24 +14,22 @@ pub struct Context {
     user_loader: Option<UserLoader>,
     blob_loader: Option<BlobLoader>,
     sync_manager: Option<Arc<RwLock<SyncManager>>>,
-    jwt_secret: String,
+    jwt_secret: secrecy::SecretString,
 }
 
 impl juniper::Context for Context {}
 
 impl Context {
-    pub fn new(db: Pool<Sqlite>, jwt_secret: String, config: P2PConfig) -> Self {
+    pub fn new(db: Pool<Sqlite>, jwt_secret: secrecy::SecretString, p2p: Arc<RwLock<SyncManager>>) -> Self {
         let user_loader = UserLoader::new(UserBatcher { pool: db.clone() }).with_yield_count(100);
         let blob_loader = BlobLoader::new(BlobBatcher { pool: db.clone() }).with_yield_count(100);
-
-        let sync_manager = Arc::new(RwLock::new(SyncManager::new(config.clone(), db.clone())));
 
         Self {
             db: Some(db),
             user_loader: Some(user_loader),
             blob_loader: Some(blob_loader),
             current_user: None,
-            sync_manager: Some(sync_manager),
+            sync_manager: Some(p2p),
             jwt_secret,
         }
     }
@@ -61,7 +59,7 @@ impl Context {
             .expect("Blob loader not initialized")
     }
 
-    pub fn jwt_secret(&self) -> &str {
+    pub fn jwt_secret(&self) -> &secrecy::SecretString {
         &self.jwt_secret
     }
 

@@ -1,7 +1,7 @@
 #[derive(thiserror::Error, Debug)]
 pub enum DANodeError {
-    #[error("failed to read env variables")]
-    ReadEnvVar,
+    #[error("failed to read env variables: {0}")]
+    ReadEnvVar(#[from] dotenvy::Error),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
     #[error("configuration error: {0}")]
@@ -12,4 +12,6 @@ pub enum DANodeError {
     GRPC(#[from] tonic::Status),
     #[error("gRPC client not connected. ID: {0}")]
     ClientNotConnected(String),
+    #[error("sqlx error: {0}")]
+    DatabaseConnection(#[from] sqlx::Error),
 }
