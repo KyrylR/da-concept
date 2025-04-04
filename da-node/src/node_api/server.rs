@@ -1,3 +1,4 @@
+use crate::errors::DANodeError;
 use crate::node_api::config::P2PConfig;
 use crate::node_api::proto::sync_service_server::{SyncService, SyncServiceServer};
 use crate::node_api::proto::{
@@ -15,9 +16,9 @@ use chrono::{DateTime, Utc};
 use sqlx::sqlite::SqlitePool;
 
 use tokio::sync::RwLock;
+use tonic::transport::Server;
+use tonic::transport::server::Router;
 use tonic::{Request, Response, Status};
-
-use tracing::info;
 
 pub struct SyncServiceImpl {
     config: P2PConfig,
@@ -305,16 +306,8 @@ pub async fn create_grpc_server(
     config: P2PConfig,
     db_pool: SqlitePool,
     sync_manager: Arc<RwLock<SyncManager>>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let addr = config.listen_addr.parse()?;
+) -> Result<Router, DANodeError> {
     let service = SyncServiceImpl::new(config, db_pool, sync_manager);
 
-    info!("Starting gRPC server on {}", addr);
-
-    tonic::transport::Server::builder()
-        .add_service(SyncServiceServer::new(service))
-        .serve(addr)
-        .await?;
-
-    Ok(())
+    Ok(Server::builder().add_service(SyncServiceServer::new(service)))
 }

@@ -1,16 +1,18 @@
 use crate::configuration::ServerSettings;
 use crate::errors::DANodeError;
 use crate::node_api::config::P2PConfig;
-use crate::node_api::init_p2p;
+use crate::node_api::server;
 use crate::node_api::sync::SyncManager;
 use crate::user_api::context::Context;
 use crate::user_api::types::{Claims, User};
 use crate::user_api::{Mutation, Query, Schema};
 
+use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use sqlx::sqlite::SqlitePoolOptions;
-use sqlx::{Pool, Sqlite};
+use sqlx::{Pool, Sqlite, SqlitePool};
 
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
@@ -24,49 +26,42 @@ use juniper::EmptySubscription;
 use juniper_axum::extract::JuniperRequest;
 use juniper_axum::graphiql;
 use juniper_axum::response::JuniperResponse;
-use secrecy::ExposeSecret;
+
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 
-use tracing::error;
+use secrecy::ExposeSecret;
+
+use tracing::{error, info};
 
 pub struct Application {
     graphql_port: u16,
-    grpc_port: u16,
     server: Serve<TcpListener, Router, Router>,
 }
 
 impl Application {
-    pub async fn build(configuration: ServerSettings) -> Result<Self, DANodeError> {
-        let connection_pool = get_connection_pool(&configuration.database_url)?;
-
-        let node_listener: TcpListener =
-            TcpListener::bind(&configuration.p2p_config.listen_addr).await?;
+    pub async fn build(
+        configuration: ServerSettings,
+        sync_manager: Arc<RwLock<SyncManager>>,
+        db_pool: SqlitePool,
+    ) -> Result<Self, DANodeError> {
         let client_listener: TcpListener =
             TcpListener::bind(configuration.client_server_endpoint).await?;
 
-        let grpc_port = node_listener.local_addr()?.port();
         let graphql_port = client_listener.local_addr()?.port();
-
-        drop(node_listener);
 
         let server = run(
             client_listener,
-            connection_pool,
-            configuration.p2p_config,
+            db_pool,
+            sync_manager,
             configuration.jwt_secret,
         )
         .await?;
 
         Ok(Self {
             graphql_port,
-            grpc_port,
             server,
         })
-    }
-
-    pub fn grpc_port(&self) -> u16 {
-        self.grpc_port
     }
 
     pub fn graphql_port(&self) -> u16 {
@@ -74,10 +69,58 @@ impl Application {
     }
 
     pub async fn run_until_stopped(self) -> Result<(), DANodeError> {
-        self.server.await.map_err(|e| {
+        let Application {
+            graphql_port,
+            server,
+        } = self;
+
+        info!(port = graphql_port, "Starting GraphQL server.");
+
+        server.await.map_err(|e| {
             error!(%e, "failed to run the server");
             DANodeError::Io(e)
         })?;
+
+        Ok(())
+    }
+}
+
+pub struct P2P {
+    connection_address: String,
+    pub grpc_server: tonic::transport::server::Router,
+    pub sync_manager: Arc<RwLock<SyncManager>>,
+}
+
+impl P2P {
+    pub async fn try_from(config: P2PConfig, db_pool: SqlitePool) -> Result<Self, DANodeError> {
+        let sync_manager = Arc::new(RwLock::new(SyncManager::new(
+            config.clone(),
+            db_pool.clone(),
+        )));
+
+        let connection_address = config.listen_addr.clone();
+
+        let grpc_server = server::create_grpc_server(config, db_pool, sync_manager.clone()).await?;
+
+        Ok(Self {
+            connection_address,
+            grpc_server,
+            sync_manager,
+        })
+    }
+
+    pub async fn run_until_stopped(self) -> Result<(), DANodeError> {
+        let P2P {
+            connection_address,
+            grpc_server,
+            ..
+        } = self;
+
+        let grpc_socket_address = SocketAddr::from_str(&connection_address)?;
+
+        info!(port = grpc_socket_address.port(), "Starting gRPC server.");
+
+        grpc_server.serve(grpc_socket_address).await?;
 
         Ok(())
     }
@@ -95,12 +138,10 @@ pub fn get_connection_pool(database_url: &str) -> Result<Pool<Sqlite>, DANodeErr
 async fn run(
     client_listener: TcpListener,
     pool: Pool<Sqlite>,
-    p2p_config: P2PConfig,
+    sync_manager: Arc<RwLock<SyncManager>>,
     jwt_secret: secrecy::SecretString,
 ) -> Result<Serve<TcpListener, Router, Router>, DANodeError> {
     let schema = Schema::new(Query, Mutation, EmptySubscription::new());
-
-    let p2p = init_p2p(p2p_config, pool.clone()).await?;
 
     let app = Router::new()
         .route(
@@ -111,7 +152,7 @@ async fn run(
         .layer(Extension(Arc::new(schema)))
         .layer(Extension(pool.clone()))
         .layer(Extension(jwt_secret.clone()))
-        .layer(Extension(p2p.clone()));
+        .layer(Extension(sync_manager.clone()));
 
     let server = axum::serve(client_listener, app);
 

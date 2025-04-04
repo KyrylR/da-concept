@@ -15,6 +15,7 @@ use tokio::time::{Duration, sleep};
 
 use uuid::Uuid;
 
+use crate::errors::DANodeError;
 use tracing::{error, info};
 
 #[derive(Clone)]
@@ -53,9 +54,7 @@ impl SyncManager {
         }
     }
 
-    pub async fn start_sync_loop(
-        sync_manager: Arc<RwLock<Self>>,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn start_sync_loop(sync_manager: Arc<RwLock<Self>>) -> Result<(), DANodeError> {
         {
             let manager = sync_manager.read().await;
 
@@ -86,9 +85,7 @@ impl SyncManager {
         }
     }
 
-    async fn process_sync_queue(
-        sync_manager: Arc<RwLock<Self>>,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn process_sync_queue(sync_manager: Arc<RwLock<Self>>) -> Result<(), DANodeError> {
         // Get a batch of blobs to process
         let mut blob_batch = Vec::new();
         {
@@ -150,7 +147,7 @@ impl SyncManager {
         sync_manager: Arc<RwLock<Self>>,
         blob_id: String,
         expected_hash: String,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<(), DANodeError> {
         // Check if we already have this blob
         let db_pool;
         let peers;
@@ -298,9 +295,7 @@ impl SyncManager {
         Ok(())
     }
 
-    async fn announce_blobs(
-        sync_manager: Arc<RwLock<Self>>,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn announce_blobs(sync_manager: Arc<RwLock<Self>>) -> Result<(), DANodeError> {
         let db_pool;
         let peers;
 

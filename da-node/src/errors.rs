@@ -14,4 +14,8 @@ pub enum DANodeError {
     ClientNotConnected(String),
     #[error("sqlx error: {0}")]
     DatabaseConnection(#[from] sqlx::Error),
+    #[error("failed to parse socket address:{0}")]
+    AddrParse(#[from] std::net::AddrParseError),
+    #[error("subtask error: {0}")]
+    Subtask(#[from] tokio::task::JoinError),
 }

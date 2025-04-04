@@ -7,7 +7,8 @@ mod user_api;
 
 use crate::configuration::get_configuration;
 use crate::logger::{get_subscriber, init_subscriber};
-use crate::startup::Application;
+use crate::node_api::sync::SyncManager;
+use crate::startup::{Application, P2P, get_connection_pool};
 
 use std::fmt::{Debug, Display};
 
@@ -30,17 +31,25 @@ async fn main() -> anyhow::Result<()> {
             return Err(anyhow::anyhow!("Failed to read configuration."));
         }
     };
-    let application = Application::build(configuration.clone()).await?;
+    let connection_pool = get_connection_pool(&configuration.database_url)?;
 
-    info!(
-        port = application.graphql_port(),
-        "Starting GraphQL server."
-    );
+    let p2p = P2P::try_from(configuration.p2p_config.clone(), connection_pool.clone()).await?;
+    let sync_manager = p2p.sync_manager.clone();
+    let application = Application::build(
+        configuration.clone(),
+        sync_manager.clone(),
+        connection_pool.clone(),
+    )
+    .await?;
 
     let application_task = tokio::spawn(application.run_until_stopped());
+    let p2p_task = tokio::spawn(p2p.run_until_stopped());
+    let sync_manager_task = tokio::spawn(SyncManager::start_sync_loop(sync_manager.clone()));
 
     tokio::select! {
         o = application_task => report_exit("API", o),
+        o = p2p_task => report_exit("P2P", o),
+        o = sync_manager_task => report_exit("SyncManager", o),
     }
 
     Ok(())
