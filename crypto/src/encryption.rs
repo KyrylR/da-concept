@@ -161,7 +161,7 @@ pub fn decrypt(data: Vec<u8>, private_key: PrivateKey) -> Result<String, CryptoE
         }
         Err(e) => {
             error!("Failed to decode decrypted data: {}", e);
-            Err(CryptoError::DecodingError)
+            Err(CryptoError::DecodeDecryptedMessage)
         }
     }
 }

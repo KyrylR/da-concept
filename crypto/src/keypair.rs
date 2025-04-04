@@ -3,6 +3,9 @@ use crate::types::{Ciphertext, PrivateKey, PublicKey};
 
 use std::ops::Rem;
 
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
+
 use num_bigint::BigUint;
 use num_traits::One;
 
@@ -18,23 +21,28 @@ pub fn get_secure_random_bytes() -> [u8; 32] {
 }
 
 impl PrivateKey {
-    /// Generate a new ElGamal keypair
-    pub fn generate(bits: usize) -> Self {
-        debug!("Generating new ElGamal keypair with {} bits", bits);
-
+    /// Create a new ElGamal private key from a given private key
+    pub fn from(private_key: BigUint) -> Self {
         let prime = BigUint::parse_bytes(PRIME, 10).expect("Unable to parse BigUint");
-
-        let random_biguint = BigUint::from_bytes_be(&get_secure_random_bytes());
-        let private_key = random_biguint % (&prime - BigUint::one());
 
         let generator = BigUint::from(2u32);
         let public_exponent = generator.modpow(&private_key, &prime);
 
         let public_key = PublicKey { prime, generator, public_exponent };
 
-        debug!("ElGamal keypair generated successfully");
-
         PrivateKey { private_key, public_key }
+    }
+
+    /// Generate a new ElGamal keypair
+    pub fn generate(bits: usize) -> Self {
+        debug!("Generating new ElGamal keypair with {} bits", bits);
+
+        PrivateKey::from(BigUint::from_bytes_be(&get_secure_random_bytes()))
+    }
+
+    /// Export the private key as a base64-encoded string
+    pub fn get_encoded_private_key(&self) -> String {
+        STANDARD.encode(&self.private_key.to_bytes_le())
     }
 
     /// Decrypt an ElGamal ciphertext
@@ -54,6 +62,16 @@ impl PrivateKey {
         let m = (ciphertext.c2.clone() * s_inv).rem(&self.public_key.prime);
 
         Ok(m)
+    }
+}
+
+impl TryFrom<&str> for PrivateKey {
+    type Error = CryptoError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let decoded_key = STANDARD.decode(value)?;
+
+        Ok(PrivateKey::from(BigUint::from_bytes_le(&decoded_key)))
     }
 }
 
@@ -81,6 +99,11 @@ impl PublicKey {
         let c2 = (message * s).rem(&self.prime);
 
         Ok(Ciphertext { c1, c2 })
+    }
+
+    /// Export the public key as a base64-encoded string
+    pub fn get_encoded_public_key(&self) -> String {
+        STANDARD.encode(&self.public_exponent.to_bytes_le())
     }
 }
 
@@ -190,5 +213,13 @@ mod tests {
 
         assert_ne!(ciphertext1.c1, ciphertext2.c1);
         assert_ne!(ciphertext1.c2, ciphertext2.c2);
+    }
+
+    #[test]
+    fn test_export_import_private_key() {
+        let key1 = PrivateKey::generate(512);
+        let key2 = PrivateKey::try_from(key1.get_encoded_private_key().as_str()).unwrap();
+
+        assert_eq!(key1.private_key, key2.private_key);
     }
 }
