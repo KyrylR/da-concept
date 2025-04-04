@@ -31,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
             return Err(anyhow::anyhow!("Failed to read configuration."));
         }
     };
-    let connection_pool = get_connection_pool(&configuration.database_url)?;
+    let connection_pool = get_connection_pool(&configuration.database).await?;
 
     let p2p = P2P::try_from(configuration.p2p_config.clone(), connection_pool.clone()).await?;
     let sync_manager = p2p.sync_manager.clone();

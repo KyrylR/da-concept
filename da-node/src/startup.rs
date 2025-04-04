@@ -1,4 +1,4 @@
-use crate::configuration::ServerSettings;
+use crate::configuration::{DatabaseSettings, ServerSettings};
 use crate::errors::DANodeError;
 use crate::node_api::config::P2PConfig;
 use crate::node_api::server;
@@ -11,8 +11,7 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use sqlx::sqlite::SqlitePoolOptions;
-use sqlx::{Pool, Sqlite, SqlitePool};
+use sqlx::{Connection, Executor, Pool, Sqlite, SqlitePool};
 
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
@@ -93,10 +92,9 @@ pub struct P2P {
 
 impl P2P {
     pub async fn try_from(config: P2PConfig, db_pool: SqlitePool) -> Result<Self, DANodeError> {
-        let sync_manager = Arc::new(RwLock::new(SyncManager::new(
-            config.clone(),
-            db_pool.clone(),
-        )));
+        let sync_manager = Arc::new(RwLock::new(
+            SyncManager::new(config.clone(), db_pool.clone()).await,
+        ));
 
         let connection_address = config.listen_addr.clone();
 
@@ -126,13 +124,16 @@ impl P2P {
     }
 }
 
-pub fn get_connection_pool(database_url: &str) -> Result<Pool<Sqlite>, DANodeError> {
-    SqlitePoolOptions::new()
-        .connect_lazy(database_url)
-        .map_err(|e| {
-            error!(%e, "failed to connect to the database");
-            DANodeError::DatabaseConnection(e)
-        })
+pub async fn get_connection_pool(database: &DatabaseSettings) -> Result<Pool<Sqlite>, DANodeError> {
+    let connection_pool = SqlitePool::connect(&database.connection_string())
+        .await
+        .expect("Failed to connect to SQLite.");
+    sqlx::migrate!("./migrations")
+        .run(&connection_pool)
+        .await
+        .expect("Failed to migrate the database");
+
+    Ok(connection_pool)
 }
 
 async fn run(

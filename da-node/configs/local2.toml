@@ -1,8 +1,11 @@
-database_url = "sqlite://db/node2.sqlite"
 client_server_endpoint = "127.0.0.1:8012"
 
+[database]
+name = "node2"
+path = "db"
+
 [p2p_config]
-node_id = "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+node_id = "4fc5cc1d-40f5-4735-be1f-54e4aafed58e"
 listen_addr = "127.0.0.1:50053"
 peers = []
 sync_interval_secs = 30

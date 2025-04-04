@@ -18,11 +18,11 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt() {
-        let private_key = PrivateKey::generate(512);
+        let private_key = PrivateKey::generate();
         let message = "Hello, ElGamal encryption!".to_string();
 
-        let encrypted = encrypt(message.clone(), private_key.clone());
-        let decrypted = decrypt(encrypted, private_key).unwrap();
+        let encrypted = encrypt(message.clone(), &private_key);
+        let decrypted = decrypt(encrypted, &private_key).unwrap();
 
         assert_eq!(message, decrypted);
     }

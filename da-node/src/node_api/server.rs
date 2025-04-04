@@ -1,10 +1,10 @@
-use crate::errors::DANodeError;
 use crate::node_api::config::P2PConfig;
 use crate::node_api::proto::sync_service_server::{SyncService, SyncServiceServer};
 use crate::node_api::proto::{
     AnnounceBlobRequest, AnnounceBlobResponse, BlobMetadata, DeleteBlobRequest, DeleteBlobResponse,
-    FetchBlobRequest, FetchBlobResponse, NodeInfoResponse, PeerSyncStatus, SyncRequest,
-    SyncResponse, SyncStatus, SyncStatusRequest, SyncStatusResponse,
+    FetchBlobRequest, FetchBlobResponse, HandshakeRequest, HandshakeResponse, HandshakeStatus,
+    NodeInfoResponse, PeerSyncStatus, SyncRequest, SyncResponse, SyncStatus, SyncStatusRequest,
+    SyncStatusResponse,
 };
 use crate::node_api::sync::SyncManager;
 use crate::user_api::types::Blob;
@@ -19,6 +19,8 @@ use tokio::sync::RwLock;
 use tonic::transport::Server;
 use tonic::transport::server::Router;
 use tonic::{Request, Response, Status};
+
+use uuid::Uuid;
 
 pub struct SyncServiceImpl {
     config: P2PConfig,
@@ -39,6 +41,7 @@ impl SyncServiceImpl {
         }
     }
 
+    #[tracing::instrument(name = "Handling announce blob request", skip(self))]
     async fn handle_announce(&self, request: AnnounceBlobRequest) -> Result<SyncResponse, Status> {
         let Some(metadata) = request.metadata else {
             return Ok(SyncResponse {
@@ -48,15 +51,7 @@ impl SyncServiceImpl {
             });
         };
 
-        let blob_exists = sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM blobs WHERE id = ? AND deleted_at IS NULL)",
-        )
-        .bind(&metadata.id)
-        .fetch_one(&self.db_pool)
-        .await
-        .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
-
-        if blob_exists {
+        if self.does_blob_exist(&metadata.id).await? {
             return Ok(SyncResponse {
                 status: SyncStatus::AlreadyExists as i32,
                 message: "Blob already exists".to_string(),
@@ -68,10 +63,15 @@ impl SyncServiceImpl {
             });
         }
 
+        let blob_id: Uuid = metadata
+            .id
+            .parse()
+            .map_err(|_| Status::invalid_argument("Invalid uuid"))?;
+
         self.sync_manager
             .write()
             .await
-            .queue_blob_fetch(metadata.id, metadata.hash);
+            .queue_blob_fetch(blob_id, metadata.hash);
 
         Ok(SyncResponse {
             status: SyncStatus::Success as i32,
@@ -84,13 +84,14 @@ impl SyncServiceImpl {
         })
     }
 
+    #[tracing::instrument(name = "Handling fetch blob request", skip(self))]
     async fn handle_fetch(&self, request: FetchBlobRequest) -> Result<SyncResponse, Status> {
-        let blob_result =
-            sqlx::query_as::<_, Blob>("SELECT * FROM blobs WHERE id = ? AND deleted_at IS NULL")
-                .bind(&request.blob_id)
-                .fetch_optional(&self.db_pool)
-                .await
-                .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
+        let blob_id: Uuid = request
+            .blob_id
+            .parse()
+            .map_err(|_| Status::invalid_argument("Invalid uuid"))?;
+
+        let blob_result = self.fetch_blob_by_id(&blob_id).await?;
 
         let Some(blob) = blob_result else {
             return Ok(SyncResponse {
@@ -126,6 +127,9 @@ impl SyncServiceImpl {
             }
         };
 
+        self.mark_blob_status_as_completed(Utc::now(), &blob.id, &request.peer_id)
+            .await?;
+
         Ok(SyncResponse {
             status: SyncStatus::Success as i32,
             message: "Blob fetched successfully".to_string(),
@@ -137,14 +141,9 @@ impl SyncServiceImpl {
         })
     }
 
+    #[tracing::instrument(name = "Handling delete blob request", skip(self))]
     async fn handle_delete(&self, request: DeleteBlobRequest) -> Result<SyncResponse, Status> {
-        let blob_exists = sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM blobs WHERE id = ? AND deleted_at IS NULL)",
-        )
-        .bind(&request.blob_id)
-        .fetch_one(&self.db_pool)
-        .await
-        .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
+        let blob_exists = self.does_blob_exist(&request.blob_id).await?;
 
         if !blob_exists {
             return Ok(SyncResponse {
@@ -156,13 +155,7 @@ impl SyncServiceImpl {
             });
         }
 
-        let now = Utc::now();
-        sqlx::query("UPDATE blobs SET deleted_at = ? WHERE id = ?")
-            .bind(now)
-            .bind(&request.blob_id)
-            .execute(&self.db_pool)
-            .await
-            .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
+        self.mark_blob_as_deleted(&request.blob_id).await?;
 
         Ok(SyncResponse {
             status: SyncStatus::Success as i32,
@@ -173,6 +166,7 @@ impl SyncServiceImpl {
         })
     }
 
+    #[tracing::instrument(name = "Handling sync status request", skip(self))]
     async fn handle_sync_status(&self, request: SyncStatusRequest) -> Result<SyncResponse, Status> {
         let statuses = sqlx::query_as::<
             _,
@@ -216,6 +210,7 @@ impl SyncServiceImpl {
         })
     }
 
+    #[tracing::instrument(name = "Handling node info request", skip(self))]
     async fn handle_node_info(&self) -> Result<SyncResponse, Status> {
         let blob_count: i32 =
             sqlx::query_scalar("SELECT COUNT(*) FROM blobs WHERE deleted_at IS NULL")
@@ -242,6 +237,97 @@ impl SyncServiceImpl {
             ),
         })
     }
+
+    #[tracing::instrument(name = "Handling handshake request", skip(self))]
+    async fn handle_handshake(&self, data: HandshakeRequest) -> Result<SyncResponse, Status> {
+        self.sync_manager
+            .write()
+            .await
+            .add_peer(data.node_id, &data.node_url)
+            .await;
+
+        Ok(SyncResponse {
+            status: SyncStatus::Success as i32,
+            message: "Handshake successful".to_string(),
+            response_data: Some(
+                crate::node_api::proto::sync_response::ResponseData::Handshake(HandshakeResponse {
+                    status: HandshakeStatus::Acknowledged as i32,
+                    peer_id: Some(self.config.node_id.clone()),
+                }),
+            ),
+        })
+    }
+
+    #[tracing::instrument(name = "Checking if blob exists", skip(self))]
+    async fn does_blob_exist(&self, blob_id: &String) -> Result<bool, Status> {
+        let blob_exists = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM blobs WHERE id = ? AND deleted_at IS NULL)",
+        )
+        .bind(blob_id)
+        .fetch_one(&self.db_pool)
+        .await
+        .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
+
+        Ok(blob_exists)
+    }
+
+    #[tracing::instrument(
+        name = "Fetching blob by ID",
+        skip(self, blob_id),
+        fields(
+            id = %blob_id,
+        )
+    )]
+    async fn fetch_blob_by_id(&self, blob_id: &Uuid) -> Result<Option<Blob>, Status> {
+
+
+        let blob_result =
+            sqlx::query_as::<_, Blob>("SELECT * FROM blobs WHERE id = ? AND deleted_at IS NULL")
+                .bind(blob_id)
+                .fetch_optional(&self.db_pool)
+                .await
+                .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
+
+        Ok(blob_result)
+    }
+
+    #[tracing::instrument(name = "Marking blob as deleted", skip(self))]
+    async fn mark_blob_as_deleted(&self, blob_id: &String) -> Result<(), Status> {
+        let now = Utc::now();
+        sqlx::query("UPDATE blobs SET deleted_at = ? WHERE id = ?")
+            .bind(now)
+            .bind(blob_id)
+            .execute(&self.db_pool)
+            .await
+            .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(name = "Mark blob status as completed", skip(self))]
+    async fn mark_blob_status_as_completed(
+        &self,
+        timestamp: DateTime<Utc>,
+        blob_id: &Uuid,
+        peer_id: &String,
+    ) -> Result<(), Status> {
+        sqlx::query(
+            "UPDATE sync_status
+                         SET sync_status = 'completed',
+                             last_sync_attempt = ?,
+                             last_successful_sync = ?
+                         WHERE blob_id = ? AND peer_node_id = ?",
+        )
+        .bind(timestamp)
+        .bind(timestamp)
+        .bind(blob_id)
+        .bind(peer_id)
+        .execute(&self.db_pool)
+        .await
+        .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
+
+        Ok(())
+    }
 }
 
 #[tonic::async_trait]
@@ -263,6 +349,9 @@ impl SyncService for SyncServiceImpl {
             Some(crate::node_api::proto::sync_request::RequestType::NodeInfo(_)) => {
                 self.handle_node_info().await?
             }
+            Some(crate::node_api::proto::sync_request::RequestType::Handshake(data)) => {
+                self.handle_handshake(data).await?
+            }
             None => {
                 return Ok(Response::new(SyncResponse {
                     status: SyncStatus::Error as i32,
@@ -274,39 +363,13 @@ impl SyncService for SyncServiceImpl {
 
         Ok(Response::new(response))
     }
-
-    type SyncStreamStream = tokio_stream::wrappers::ReceiverStream<Result<SyncResponse, Status>>;
-
-    async fn sync_stream(
-        &self,
-        request: Request<tonic::Streaming<SyncRequest>>,
-    ) -> Result<Response<Self::SyncStreamStream>, Status> {
-        let (tx, rx) = tokio::sync::mpsc::channel(10);
-        let mut stream = request.into_inner();
-
-        tokio::spawn(async move {
-            while stream.message().await.unwrap_or(None).is_some() {
-                tx.send(Ok(SyncResponse {
-                    status: SyncStatus::Error as i32,
-                    message: "Stream sync not implemented".to_string(),
-                    response_data: None,
-                }))
-                .await
-                .unwrap();
-            }
-        });
-
-        Ok(Response::new(tokio_stream::wrappers::ReceiverStream::new(
-            rx,
-        )))
-    }
 }
 
 pub async fn create_grpc_server(
     config: P2PConfig,
     db_pool: SqlitePool,
     sync_manager: Arc<RwLock<SyncManager>>,
-) -> Result<Router, DANodeError> {
+) -> Result<Router, Status> {
     let service = SyncServiceImpl::new(config, db_pool, sync_manager);
 
     Ok(Server::builder().add_service(SyncServiceServer::new(service)))

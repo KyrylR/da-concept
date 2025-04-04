@@ -11,8 +11,7 @@ CREATE TABLE sync_status
     retry_count          INTEGER   NOT NULL DEFAULT 0,
     created_at           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (blob_id, peer_node_id),
-    FOREIGN KEY (blob_id) REFERENCES blobs (id) ON DELETE CASCADE
+    PRIMARY KEY (blob_id, peer_node_id)
 );
 
 -- Create a trigger to automatically update the updated_at field

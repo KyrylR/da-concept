@@ -10,10 +10,6 @@ use config::{Config, Environment, File as ConfigFile};
 #[derive(Parser, Debug)]
 #[clap(version, about, author)]
 pub struct CliSettings {
-    /// Location of the DB, by default will be read from the DATABASE_URL env var or `.env` files.
-    #[clap(long, short = 'D', env)]
-    pub database_url: Option<String>,
-
     /// URL of the client server to connect to, by default will be read from the CLIENT_SERVER_ENDPOINT env var or `.env` files.
     #[clap(long, short = 'C', env)]
     pub client_server_endpoint: Option<String>,
@@ -29,14 +25,25 @@ pub struct CliSettings {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct ServerSettings {
-    #[serde(default)]
-    pub database_url: String,
+    pub database: DatabaseSettings,
     #[serde(default)]
     pub client_server_endpoint: String,
     #[serde(default)]
     pub jwt_secret: secrecy::SecretString,
     #[serde(default)]
     pub p2p_config: P2PConfig,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct DatabaseSettings {
+    pub path: String,
+    pub name: String,
+}
+
+impl DatabaseSettings {
+    pub fn connection_string(&self) -> String {
+        format!("sqlite://{}/{}.sqlite", self.path, self.name)
+    }
 }
 
 pub fn get_configuration() -> Result<ServerSettings, DANodeError> {
@@ -65,7 +72,7 @@ pub fn get_configuration() -> Result<ServerSettings, DANodeError> {
     };
 
     let settings = ServerSettings {
-        database_url: cli_args.database_url.unwrap_or(base_settings.database_url),
+        database: base_settings.database,
         client_server_endpoint: cli_args
             .client_server_endpoint
             .unwrap_or(base_settings.client_server_endpoint),

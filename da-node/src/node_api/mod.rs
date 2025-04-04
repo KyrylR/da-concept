@@ -14,10 +14,12 @@ use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
+use uuid::Uuid;
+
 /// Enqueue a blob for syncing to all peers
 pub async fn sync_blob(
     sync_manager: &Arc<RwLock<SyncManager>>,
-    blob_id: String,
+    blob_id: Uuid,
     hash: String,
 ) -> Result<(), DANodeError> {
     let mut manager = sync_manager.write().await;

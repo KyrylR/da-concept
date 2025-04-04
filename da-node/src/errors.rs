@@ -18,4 +18,6 @@ pub enum DANodeError {
     AddrParse(#[from] std::net::AddrParseError),
     #[error("subtask error: {0}")]
     Subtask(#[from] tokio::task::JoinError),
+    #[error("received invalid response from peer: {0}")]
+    InvalidResponse(String),
 }

@@ -13,8 +13,7 @@ CREATE TABLE blobs
     public_key   TEXT      NOT NULL,
     created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at   TIMESTAMP,
-    FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE
+    deleted_at   TIMESTAMP
 );
 
 -- Create index on owner_id for faster lookups

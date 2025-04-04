@@ -35,6 +35,7 @@ message SyncRequest {
     DeleteBlobRequest delete = 3;
     SyncStatusRequest status = 4;
     NodeInfoRequest node_info = 5;
+    HandshakeRequest handshake = 6;
   }
 }
 
@@ -47,6 +48,7 @@ message SyncResponse {
     DeleteBlobResponse delete = 5;
     SyncStatusResponse status_resp = 6;
     NodeInfoResponse node_info = 7;
+    HandshakeResponse handshake = 8;
   }
 }
 
@@ -62,7 +64,8 @@ message AnnounceBlobResponse {
 // Request to fetch a blob from peers
 message FetchBlobRequest {
   string blob_id = 1;
-  bool include_content = 2;
+  string peer_id = 2;
+  bool include_content = 3;
 }
 
 message FetchBlobResponse {
@@ -105,7 +108,22 @@ message NodeInfoResponse {
   repeated string capabilities = 4;
 }
 
+// Request to initiate a handshake with a peer
+message HandshakeRequest {
+  string node_id = 1;
+  string node_url = 2;
+}
+
+enum HandshakeStatus {
+  ACKNOWLEDGED = 0;
+  DECLINED = 1;
+}
+
+message HandshakeResponse {
+  HandshakeStatus status = 1;
+  optional string peer_id = 2;
+}
+
 service SyncService {
   rpc Sync(SyncRequest) returns (SyncResponse) {}
-  rpc SyncStream(stream SyncRequest) returns (stream SyncResponse) {}
 }

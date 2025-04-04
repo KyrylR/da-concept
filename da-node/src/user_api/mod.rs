@@ -166,7 +166,7 @@ impl Mutation {
 
         sync_blob(
             context.sync_manager(),
-            blob.id.to_string().clone(),
+            blob.id,
             blob.hash.clone().unwrap_or_default(),
         )
         .await
@@ -199,7 +199,7 @@ impl Mutation {
 
         sync_blob(
             context.sync_manager(),
-            blob.id.to_string(),
+            blob.id,
             blob.hash.unwrap_or_default(),
         )
         .await

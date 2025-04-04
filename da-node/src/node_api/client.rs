@@ -3,8 +3,8 @@ use crate::errors::DANodeError;
 use crate::node_api::proto;
 use crate::node_api::proto::sync_service_client::SyncServiceClient;
 use crate::node_api::proto::{
-    AnnounceBlobRequest, BlobMetadata, DeleteBlobRequest, FetchBlobRequest, NodeInfoRequest,
-    SyncRequest, SyncStatusRequest,
+    AnnounceBlobRequest, BlobMetadata, DeleteBlobRequest, FetchBlobRequest, HandshakeRequest,
+    HandshakeResponse, NodeInfoRequest, SyncRequest, SyncStatusRequest,
 };
 
 use std::sync::Arc;
@@ -12,9 +12,11 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tonic::transport::Channel;
 
+use uuid::Uuid;
+
 type GrpcClient = SyncServiceClient<Channel>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PeerClient {
     peer_url: String,
     client: Arc<RwLock<Option<GrpcClient>>>,
@@ -30,22 +32,23 @@ impl PeerClient {
 
     pub async fn connect(&self) -> Result<(), DANodeError> {
         let peer_url = self.peer_url.clone();
-        let client = SyncServiceClient::connect(peer_url).await?;
+        let client = SyncServiceClient::connect(peer_url).await;
 
         let mut write_guard = self.client.write().await;
-        *write_guard = Some(client);
+        *write_guard = Some(client?);
 
         Ok(())
     }
 
     async fn get_client(&self) -> Result<GrpcClient, DANodeError> {
-        let read_guard = self.client.read().await;
+        {
+            let read_guard = self.client.read().await;
 
-        if let Some(client) = read_guard.clone() {
-            return Ok(client);
+            if let Some(client) = read_guard.clone() {
+                return Ok(client);
+            }
         }
 
-        drop(read_guard);
         self.connect().await?;
 
         let Some(read_guard) = self.client.read().await.clone() else {
@@ -53,6 +56,32 @@ impl PeerClient {
         };
 
         Ok(read_guard)
+    }
+
+    pub async fn handshake(
+        &self,
+        node_id: &str,
+        node_url: &str,
+    ) -> Result<HandshakeResponse, DANodeError> {
+        let mut client = self.get_client().await?;
+
+        let request = SyncRequest {
+            request_type: Some(proto::sync_request::RequestType::Handshake(
+                HandshakeRequest {
+                    node_id: node_id.to_owned(),
+                    node_url: format!("http://{}", node_url),
+                },
+            )),
+        };
+
+        let response = client.sync(request).await?;
+
+        match response.into_inner().response_data {
+            Some(proto::sync_response::ResponseData::Handshake(data)) => Ok(data),
+            _ => Err(DANodeError::InvalidResponse(
+                "Invalid response from handshake".to_string(),
+            )),
+        }
     }
 
     pub async fn announce_blob(&self, metadata: BlobMetadata) -> Result<bool, DANodeError> {
@@ -76,14 +105,16 @@ impl PeerClient {
 
     pub async fn fetch_blob(
         &self,
-        blob_id: String,
+        node_id: &str,
+        blob_id: Uuid,
         include_content: bool,
     ) -> Result<Option<proto::Blob>, DANodeError> {
         let mut client = self.get_client().await?;
 
         let request = SyncRequest {
             request_type: Some(proto::sync_request::RequestType::Fetch(FetchBlobRequest {
-                blob_id,
+                blob_id: blob_id.to_string(),
+                peer_id: node_id.to_owned(),
                 include_content,
             })),
         };
