@@ -82,6 +82,7 @@ pub struct Claims {
 pub struct UserSchema {
     id: Uuid,
     username: String,
+    private_key: String,
     email: Option<String>,
 }
 
@@ -134,6 +135,7 @@ impl UserSchema {
         Self {
             id: user.id,
             username: user.username,
+            private_key: user.private_key,
             email: user.email,
         }
     }

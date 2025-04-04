@@ -332,8 +332,6 @@ impl SyncManager {
             .execute(db_pool)
             .await?;
 
-            dbg!("here2");
-
             return Ok(false);
         }
 
