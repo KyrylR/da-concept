@@ -28,14 +28,21 @@ impl PrivateKey {
         let generator = BigUint::from(2u32);
         let public_exponent = generator.modpow(&private_key, &prime);
 
-        let public_key = PublicKey { prime, generator, public_exponent };
+        let public_key = PublicKey {
+            prime,
+            generator,
+            public_exponent,
+        };
 
-        PrivateKey { private_key, public_key }
+        PrivateKey {
+            private_key,
+            public_key,
+        }
     }
 
     /// Generate a new ElGamal keypair
-    pub fn generate(bits: usize) -> Self {
-        debug!("Generating new ElGamal keypair with {} bits", bits);
+    pub fn generate() -> Self {
+        debug!("Generating new ElGamal keypair");
 
         PrivateKey::from(BigUint::from_bytes_be(&get_secure_random_bytes()))
     }
@@ -50,7 +57,9 @@ impl PrivateKey {
         debug!("Decrypting ElGamal ciphertext");
 
         // Compute s = c1^x mod p
-        let s = ciphertext.c1.modpow(&self.private_key, &self.public_key.prime);
+        let s = ciphertext
+            .c1
+            .modpow(&self.private_key, &self.public_key.prime);
 
         // Compute s^(-1) mod p
         let s_inv = s.modpow(
@@ -129,7 +138,7 @@ mod tests {
 
     #[test]
     fn test_key_generation() {
-        let private_key = PrivateKey::generate(512);
+        let private_key = PrivateKey::generate();
 
         assert_eq!(
             private_key.public_key.public_exponent,
@@ -145,7 +154,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
-        let private_key = PrivateKey::generate(512);
+        let private_key = PrivateKey::generate();
         let public_key = private_key.public_key.clone();
 
         for i in 1..100 {
@@ -159,7 +168,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_large_message_fails() {
-        let private_key = PrivateKey::generate(512);
+        let private_key = PrivateKey::generate();
         let public_key = private_key.public_key.clone();
 
         let message = public_key.prime.clone() + BigUint::one();
@@ -183,7 +192,7 @@ mod tests {
 
     #[quickcheck]
     fn quickcheck_encrypt_decrypt_preserves_message(message: u32) -> TestResult {
-        let private_key = PrivateKey::generate(512);
+        let private_key = PrivateKey::generate();
         let public_key = private_key.public_key.clone();
 
         let message_biguint = BigUint::from(message);
@@ -203,8 +212,8 @@ mod tests {
 
     #[test]
     fn test_different_keys_produce_different_ciphertexts() {
-        let key1 = PrivateKey::generate(512);
-        let key2 = PrivateKey::generate(512);
+        let key1 = PrivateKey::generate();
+        let key2 = PrivateKey::generate();
 
         let message = BigUint::from(42u32);
 
@@ -217,7 +226,7 @@ mod tests {
 
     #[test]
     fn test_export_import_private_key() {
-        let key1 = PrivateKey::generate(512);
+        let key1 = PrivateKey::generate();
         let key2 = PrivateKey::try_from(key1.get_encoded_private_key().as_str()).unwrap();
 
         assert_eq!(key1.private_key, key2.private_key);

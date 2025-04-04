@@ -1,7 +1,7 @@
 use crate::user_api::context::Context;
 
 use base64::Engine;
-use base64::engine::general_purpose;
+use base64::engine::general_purpose::STANDARD;
 
 use juniper::{FieldResult, GraphQLInputObject, GraphQLObject, graphql_object};
 
@@ -17,6 +17,7 @@ pub struct User {
     pub id: Uuid,
     pub username: String,
     pub password_hash: String,
+    pub private_key: String,
     pub email: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -32,6 +33,7 @@ pub struct Blob {
     pub size: i32,
     pub hash: Option<String>,
     pub owner_id: Uuid,
+    pub public_key: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub deleted_at: Option<DateTime<Utc>>,
@@ -98,9 +100,9 @@ impl UserSchema {
     }
 
     async fn blobs(&self, context: &Context) -> FieldResult<Vec<BlobSchema>> {
-        if context.current_user().is_none() {
+        let Some(current_user) = context.current_user() else {
             return Err("Authentication required".into());
-        }
+        };
 
         let blobs = sqlx::query_as::<_, Blob>(
             "SELECT * FROM blobs WHERE owner_id = ? AND deleted_at IS NULL",
@@ -109,7 +111,21 @@ impl UserSchema {
         .fetch_all(context.pool())
         .await?;
 
-        Ok(blobs.into_iter().map(BlobSchema::new).collect())
+        let private_key = crypto::PrivateKey::try_from(current_user.private_key.as_str())?;
+        let related_pubkey = private_key.public_key.get_encoded_public_key();
+
+        let mut result: Vec<BlobSchema> = vec![];
+        for blob in blobs {
+            let content: String = if blob.public_key == related_pubkey {
+                crypto::decrypt(blob.content.clone(), &private_key)?
+            } else {
+                STANDARD.encode(&blob.content)
+            };
+
+            result.push(BlobSchema::from(blob, content));
+        }
+
+        Ok(result)
     }
 }
 
@@ -126,6 +142,7 @@ impl UserSchema {
 #[derive(Clone, Debug)]
 pub struct BlobSchema {
     id: Uuid,
+    content: String,
     metadata: Option<String>,
     content_type: Option<String>,
     size: i32,
@@ -166,13 +183,8 @@ impl BlobSchema {
         ))
     }
 
-    async fn content(&self, context: &Context) -> FieldResult<String> {
-        let blob = sqlx::query_as::<_, Blob>("SELECT * FROM blobs WHERE id = ?")
-            .bind(self.id)
-            .fetch_one(context.pool())
-            .await?;
-
-        Ok(general_purpose::STANDARD.encode(&blob.content))
+    async fn content(&self) -> FieldResult<String> {
+        Ok(self.content.clone())
     }
 }
 
@@ -180,6 +192,20 @@ impl BlobSchema {
     pub fn new(blob: Blob) -> Self {
         Self {
             id: blob.id,
+            content: STANDARD.encode(&blob.content),
+            metadata: blob.metadata,
+            content_type: blob.content_type,
+            size: blob.size,
+            hash: blob.hash,
+            owner_id: blob.owner_id,
+            created_at: blob.created_at,
+        }
+    }
+
+    pub fn from(blob: Blob, content: String) -> Self {
+        Self {
+            id: blob.id,
+            content,
             metadata: blob.metadata,
             content_type: blob.content_type,
             size: blob.size,

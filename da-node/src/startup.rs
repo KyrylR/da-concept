@@ -83,7 +83,7 @@ impl Application {
     }
 }
 
-pub fn get_connection_pool(database_url: &String) -> Result<Pool<Sqlite>, DANodeError> {
+pub fn get_connection_pool(database_url: &str) -> Result<Pool<Sqlite>, DANodeError> {
     SqlitePoolOptions::new()
         .connect_lazy(database_url)
         .map_err(|e| {

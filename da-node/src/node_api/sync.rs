@@ -227,8 +227,8 @@ impl SyncManager {
                     sqlx::query(
                         "INSERT INTO blobs (
                             id, content, metadata, content_type, size, hash,
-                            owner_id, created_at, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            owner_id, public_key, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     )
                     .bind(&metadata.id)
                     .bind(&proto_blob.content)
@@ -237,6 +237,7 @@ impl SyncManager {
                     .bind(metadata.size)
                     .bind(&metadata.hash)
                     .bind(&metadata.owner_id)
+                    .bind(&metadata.public_key)
                     .bind(created_at)
                     .bind(now)
                     .execute(&db_pool)
@@ -335,6 +336,7 @@ impl SyncManager {
                 content_type: blob.content_type.clone(),
                 size: blob.size,
                 owner_id: blob.owner_id.to_string(),
+                public_key: blob.public_key.clone(),
                 metadata: blob.metadata.clone(),
                 created_at: blob.created_at.to_rfc3339(),
                 deleted_at: None,

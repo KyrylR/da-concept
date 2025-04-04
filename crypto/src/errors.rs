@@ -13,5 +13,5 @@ pub enum CryptoError {
     #[error("Random number generation error")]
     RandomGenerationError,
     #[error("Failed to decode decrypted message")]
-    DecodeDecryptedMessage
+    DecodeDecryptedMessage,
 }

@@ -5,40 +5,44 @@ edition = "2024"
 
 [dependencies]
 config = "0.15.9"
+dotenvy = "0.15.7"
+clap = { version = "4.5.29", features = ["derive", "env"] }
+
+argon2 = "0.5.3"
+
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "1.44.0", features = ["macros", "rt-multi-thread"] }
 
-uuid= { version= "1", features = ["v4", "serde"] }
-chrono = { version= "0.4.22", default-features = false, features = ["clock"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4.22", default-features = false, features = ["clock"] }
 
+sqlx = { version = "0.8.3", features = ["runtime-tokio", "macros", "sqlite", "chrono", "uuid"] }
+
+jsonwebtoken = "9.3.1"
 axum = { version = "0.8", features = ["http1", "json", "query", "tracing", "ws"], default-features = false }
+juniper = { version = "0.16.1", features = ["chrono", "uuid"] }
 juniper_axum = { version = "0.2.0", features = ["subscriptions"] }
 
-time = { version = "0.3.39", features = ["serde-well-known"] }
+tonic = "0.12.3"
+prost = "0.13.5"
+
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "time"] }
 tracing-bunyan-formatter = "0.3.10"
 tracing-log = "0.2.0"
 secrecy = { version = "0.10.3", features = ["serde"] }
-tracing-actix-web = "0.7.16"
-unicode-segmentation = "1.12.0"
-validator = "0.20.0"
-clap = { version = "4.5.29", features = ["derive", "env"] }
-thiserror = "2.0.12"
-dotenvy = "0.15.7"
-argon2 = "0.5.3"
-juniper = { version = "0.16.1", features = ["chrono", "uuid"] }
-jsonwebtoken = "9.3.1"
-sqlx = { version = "0.8.3", features = ["runtime-tokio", "macros", "sqlite", "chrono", "uuid"] }
-anyhow = "1.0.97"
-dataloader = "0.18.0"
+
 base64 = "0.22.1"
+
+anyhow = "1.0.97"
+thiserror = "2.0.12"
+
+dataloader = "0.18.0"
+tokio-stream = "0.1.17"
+
 sha2 = "0.10.8"
 ring = "0.17.14"
-tonic = "0.12.3"
-prost = "0.13.5"
-tokio-stream = "0.1.17"
-log = "0.4.27"
+crypto = { path = "../crypto" }
 
 [build-dependencies]
 tonic-build = "0.12.3"

@@ -4,6 +4,7 @@ CREATE TABLE users
     id            TEXT PRIMARY KEY,
     username      TEXT      NOT NULL UNIQUE,
     password_hash TEXT      NOT NULL,
+    private_key   TEXT      NOT NULL,
     email         TEXT UNIQUE,
     created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

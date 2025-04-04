@@ -17,7 +17,7 @@ use tracing::{debug, error};
 /// # Returns
 ///
 /// * `Vec<u8>` - The encrypted data
-pub fn encrypt(input: String, private_key: PrivateKey) -> Vec<u8> {
+pub fn encrypt(input: String, private_key: &PrivateKey) -> Vec<u8> {
     debug!("Encrypting string with length {}", input.len());
 
     let bytes = input.into_bytes();
@@ -77,7 +77,7 @@ pub fn encrypt(input: String, private_key: PrivateKey) -> Vec<u8> {
 /// # Returns
 ///
 /// * `String` - The decrypted string
-pub fn decrypt(data: Vec<u8>, private_key: PrivateKey) -> Result<String, CryptoError> {
+pub fn decrypt(data: Vec<u8>, private_key: &PrivateKey) -> Result<String, CryptoError> {
     debug!("Decrypting blob with length {}", data.len());
 
     if data.len() < 4 {
@@ -198,71 +198,71 @@ mod tests {
 
     #[test]
     fn test_empty_string() {
-        let private_key = PrivateKey::generate(512);
+        let private_key = PrivateKey::generate();
         let empty = String::new();
 
-        let encrypted = encrypt(empty.clone(), private_key.clone());
-        let decrypted = decrypt(encrypted, private_key).unwrap();
+        let encrypted = encrypt(empty.clone(), &private_key);
+        let decrypted = decrypt(encrypted, &private_key).unwrap();
 
         assert_eq!(empty, decrypted);
     }
 
     #[test]
     fn test_short_string() {
-        let private_key = PrivateKey::generate(512);
+        let private_key = PrivateKey::generate();
         let message: String = Faker.fake();
 
-        let encrypted = encrypt(message.clone(), private_key.clone());
-        let decrypted = decrypt(encrypted, private_key).unwrap();
+        let encrypted = encrypt(message.clone(), &private_key);
+        let decrypted = decrypt(encrypted, &private_key).unwrap();
 
         assert_eq!(message, decrypted);
     }
 
     #[test]
     fn test_long_string() {
-        let private_key = PrivateKey::generate(512);
+        let private_key = PrivateKey::generate();
         let message = random_string(1000);
 
-        let encrypted = encrypt(message.clone(), private_key.clone());
-        let decrypted = decrypt(encrypted, private_key).unwrap();
+        let encrypted = encrypt(message.clone(), &private_key);
+        let decrypted = decrypt(encrypted, &private_key).unwrap();
 
         assert_eq!(message, decrypted);
     }
 
     #[test]
     fn test_unicode_string() {
-        let private_key = PrivateKey::generate(512);
+        let private_key = PrivateKey::generate();
         let message = "Hello, 世界! 😊 UTF-8 test ñáéíóú".to_string();
 
-        let encrypted = encrypt(message.clone(), private_key.clone());
-        let decrypted = decrypt(encrypted, private_key).unwrap();
+        let encrypted = encrypt(message.clone(), &private_key);
+        let decrypted = decrypt(encrypted, &private_key).unwrap();
 
         assert_eq!(message, decrypted);
     }
 
     #[test]
     fn test_invalid_ciphertext() {
-        let private_key = PrivateKey::generate(512);
+        let private_key = PrivateKey::generate();
 
-        let result = decrypt(vec![1, 2, 3], private_key.clone());
+        let result = decrypt(vec![1, 2, 3], &private_key);
         assert!(matches!(result, Err(CryptoError::InvalidCiphertext)));
 
         let mut invalid = vec![0, 0, 0, 1]; // 1 ciphertext
         invalid.extend_from_slice(&[0, 0, 0, 0]); // c1_len = 0
 
-        let result = decrypt(invalid, private_key);
+        let result = decrypt(invalid, &private_key);
         assert!(matches!(result, Err(CryptoError::InvalidCiphertext)));
     }
 
     #[test]
     fn test_different_keys() {
-        let key1 = PrivateKey::generate(512);
-        let key2 = PrivateKey::generate(512);
+        let key1 = PrivateKey::generate();
+        let key2 = PrivateKey::generate();
         let message: String = Faker.fake();
 
-        let encrypted = encrypt(message.clone(), key1.clone());
+        let encrypted = encrypt(message.clone(), &key1);
 
-        let result = decrypt(encrypted.clone(), key2);
+        let result = decrypt(encrypted.clone(), &key2);
 
         if let Ok(decrypted) = result {
             assert_ne!(
@@ -271,21 +271,21 @@ mod tests {
             );
         }
 
-        let correct = decrypt(encrypted, key1).unwrap();
+        let correct = decrypt(encrypted, &key1).unwrap();
         assert_eq!(message, correct);
     }
 
     #[test]
     fn test_corrupted_data() {
-        let private_key = PrivateKey::generate(512);
+        let private_key = PrivateKey::generate();
         let message: String = Faker.fake();
 
-        let mut encrypted = encrypt(message, private_key.clone());
+        let mut encrypted = encrypt(message, &private_key);
 
         if encrypted.len() > 10 {
             encrypted[10] ^= 0xFF; // Flip all bits at position 10
 
-            if let Ok(decrypted) = decrypt(encrypted, private_key) {
+            if let Ok(decrypted) = decrypt(encrypted, &private_key) {
                 assert_ne!("Important data", decrypted)
             }
         }
@@ -293,12 +293,12 @@ mod tests {
 
     #[quickcheck]
     fn quickcheck_encrypt_decrypt_roundtrip(s: ArbitraryString) -> TestResult {
-        let private_key = PrivateKey::generate(512);
+        let private_key = PrivateKey::generate();
         let message = s.0;
 
-        let encrypted = encrypt(message.clone(), private_key.clone());
+        let encrypted = encrypt(message.clone(), &private_key);
 
-        match decrypt(encrypted, private_key) {
+        match decrypt(encrypted, &private_key) {
             Ok(decrypted) => TestResult::from_bool(message == decrypted),
             Err(_) => TestResult::error("Decryption failed"),
         }
@@ -306,13 +306,13 @@ mod tests {
 
     #[test]
     fn test_with_fake_data() {
-        let private_key = PrivateKey::generate(512);
+        let private_key = PrivateKey::generate();
 
         for _ in 0..10 {
             let sentence: String = Faker.fake();
 
-            let encrypted = encrypt(sentence.clone(), private_key.clone());
-            let decrypted = decrypt(encrypted, private_key.clone()).unwrap();
+            let encrypted = encrypt(sentence.clone(), &private_key);
+            let decrypted = decrypt(encrypted, &private_key).unwrap();
 
             assert_eq!(sentence, decrypted);
         }
@@ -320,10 +320,10 @@ mod tests {
 
     #[test]
     fn test_serialization_format() {
-        let private_key = PrivateKey::generate(512);
+        let private_key = PrivateKey::generate();
         let message = "Test".to_string();
 
-        let encrypted = encrypt(message, private_key.clone());
+        let encrypted = encrypt(message, &private_key);
 
         assert!(encrypted.len() >= 4, "Encrypted data too short");
 

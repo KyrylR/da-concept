@@ -9,7 +9,7 @@ pub enum DANodeError {
     #[error("gRPC communication error: {0}")]
     GRPCClient(#[from] tonic::transport::Error),
     #[error("gRPC error: {0}")]
-    GRPC(#[from] tonic::Status),
+    Grpc(#[from] tonic::Status),
     #[error("gRPC client not connected. ID: {0}")]
     ClientNotConnected(String),
     #[error("sqlx error: {0}")]

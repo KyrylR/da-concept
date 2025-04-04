@@ -10,6 +10,7 @@ CREATE TABLE blobs
     size         INTEGER   NOT NULL,
     hash         TEXT, -- For integrity verification
     owner_id     TEXT      NOT NULL,
+    public_key   TEXT      NOT NULL,
     created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at   TIMESTAMP,

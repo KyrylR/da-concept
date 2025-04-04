@@ -17,9 +17,10 @@ message BlobMetadata {
   optional string content_type = 3;
   int32 size = 4;
   string owner_id = 5;
-  optional string metadata = 6;
-  string created_at = 7;
-  optional string deleted_at = 8;
+  string public_key = 6;
+  optional string metadata = 7;
+  string created_at = 8;
+  optional string deleted_at = 9;
 }
 
 message Blob {

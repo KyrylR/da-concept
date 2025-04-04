@@ -107,6 +107,7 @@ impl SyncServiceImpl {
             content_type: blob.content_type,
             size: blob.size,
             owner_id: blob.owner_id.to_string(),
+            public_key: blob.public_key,
             metadata: blob.metadata,
             created_at: blob.created_at.to_rfc3339(),
             deleted_at: blob.deleted_at.map(|dt| dt.to_rfc3339()),
@@ -283,7 +284,7 @@ impl SyncService for SyncServiceImpl {
         let mut stream = request.into_inner();
 
         tokio::spawn(async move {
-            while let Some(_) = stream.message().await.unwrap_or(None) {
+            while stream.message().await.unwrap_or(None).is_some() {
                 tx.send(Ok(SyncResponse {
                     status: SyncStatus::Error as i32,
                     message: "Stream sync not implemented".to_string(),

@@ -14,9 +14,6 @@ use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
 };
 
-use base64::Engine;
-use base64::engine::general_purpose;
-
 use chrono::{Duration, Utc};
 use jsonwebtoken::{EncodingKey, Header, encode as encodeJWT};
 use juniper::{EmptySubscription, FieldResult, graphql_object};
@@ -55,19 +52,6 @@ impl Query {
 
         Ok(blobs.into_iter().map(BlobSchema::new).collect())
     }
-
-    async fn my_blobs(context: &Context) -> FieldResult<Vec<BlobSchema>> {
-        let current_user = context.current_user().ok_or("Authentication required")?;
-
-        let blobs = sqlx::query_as::<_, Blob>(
-            "SELECT * FROM blobs WHERE owner_id = ? AND deleted_at IS NULL",
-        )
-        .bind(current_user.id)
-        .fetch_all(context.pool())
-        .await?;
-
-        Ok(blobs.into_iter().map(BlobSchema::new).collect())
-    }
 }
 
 pub struct Mutation;
@@ -80,7 +64,7 @@ fn get_secure_random_bytes() -> [u8; 32] {
 
 #[graphql_object(context = Context)]
 impl Mutation {
-    async fn register(input: NewUserInput, context: &Context) -> FieldResult<UserSchema> {
+    async fn register(input: NewUserInput, context: &Context) -> FieldResult<AuthPayload> {
         let password_hash = Argon2::default()
             .hash_password(
                 input.password.as_bytes(),
@@ -88,17 +72,36 @@ impl Mutation {
             )?
             .to_string();
 
+        let private_key = crypto::PrivateKey::generate();
+
         let user: User = sqlx::query_as(
-            "INSERT INTO users (id, username, password_hash, email) VALUES (?, ?, ?, ?) RETURNING *"
+            "INSERT INTO users (id, username, password_hash, private_key, email) VALUES (?, ?, ?, ?, ?) RETURNING *"
         )
             .bind(Uuid::new_v4())
             .bind(&input.username)
             .bind(&password_hash)
+            .bind(private_key.get_encoded_private_key())
             .bind(&input.email)
             .fetch_one(context.pool())
             .await?;
 
-        Ok(UserSchema::new(user))
+        let now = Utc::now();
+        let claims = Claims {
+            sub: user.id,
+            exp: (now + Duration::days(7)).timestamp(),
+            iat: now.timestamp(),
+        };
+
+        let token = encodeJWT(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(context.jwt_secret().expose_secret().as_bytes()),
+        )?;
+
+        Ok(AuthPayload {
+            token,
+            user: UserSchema::new(user),
+        })
     }
 
     async fn login(input: LoginInput, context: &Context) -> FieldResult<AuthPayload> {
@@ -135,9 +138,10 @@ impl Mutation {
     async fn add_blob(blob_input: BlobInput, context: &Context) -> FieldResult<BlobSchema> {
         let current_user = context.current_user().ok_or("Authentication required")?;
 
-        let content = general_purpose::STANDARD
-            .decode(&blob_input.content)
-            .map_err(|_| "Invalid base64 content")?;
+        let private_key = crypto::PrivateKey::try_from(current_user.private_key.as_str())?;
+        let related_pubkey = private_key.public_key.get_encoded_public_key();
+
+        let content = crypto::encrypt(blob_input.content.clone(), &private_key);
 
         let size = content.len() as i64;
 
@@ -146,8 +150,8 @@ impl Mutation {
         let hash = format!("{:x}", hasher.finalize());
 
         let blob: Blob = sqlx::query_as(
-            "INSERT INTO blobs (id, content, metadata, content_type, size, hash, owner_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *",
+            "INSERT INTO blobs (id, content, metadata, content_type, size, hash, owner_id, public_key)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
         )
         .bind(Uuid::new_v4())
         .bind(&content)
@@ -156,6 +160,7 @@ impl Mutation {
         .bind(size)
         .bind(&hash)
         .bind(current_user.id)
+        .bind(related_pubkey)
         .fetch_one(context.pool())
         .await?;
 
@@ -167,7 +172,7 @@ impl Mutation {
         .await
         .map_err(|e| format!("Failed to sync blob: {}", e))?;
 
-        Ok(BlobSchema::new(blob))
+        Ok(BlobSchema::from(blob, blob_input.content))
     }
 
     async fn delete_blob(input: BlobIdInput, context: &Context) -> FieldResult<bool> {
