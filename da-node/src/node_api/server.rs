@@ -279,8 +279,6 @@ impl SyncServiceImpl {
         )
     )]
     async fn fetch_blob_by_id(&self, blob_id: &Uuid) -> Result<Option<Blob>, Status> {
-
-
         let blob_result =
             sqlx::query_as::<_, Blob>("SELECT * FROM blobs WHERE id = ? AND deleted_at IS NULL")
                 .bind(blob_id)

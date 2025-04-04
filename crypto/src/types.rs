@@ -1,7 +1,10 @@
 use num_bigint::BigUint;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 /// ElGamal public key
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct PublicKey {
     /// Large prime number
     pub prime: BigUint,
@@ -13,6 +16,7 @@ pub struct PublicKey {
 
 /// ElGamal private key
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct PrivateKey {
     /// Secret exponent
     pub private_key: BigUint,
@@ -22,6 +26,7 @@ pub struct PrivateKey {
 
 /// ElGamal ciphertext
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct Ciphertext {
     /// Ephemeral key: g^y
     pub c1: BigUint,

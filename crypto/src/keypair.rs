@@ -9,6 +9,7 @@ use base64::engine::general_purpose::STANDARD;
 use num_bigint::BigUint;
 use num_traits::One;
 
+#[cfg(feature = "tracing")]
 use tracing::{debug, error};
 
 const PRIME: &[u8] =
@@ -24,6 +25,8 @@ impl PrivateKey {
     /// Create a new ElGamal private key from a given private key
     pub fn from(private_key: BigUint) -> Self {
         let prime = BigUint::parse_bytes(PRIME, 10).expect("Unable to parse BigUint");
+
+        let private_key = private_key % &prime;
 
         let generator = BigUint::from(2u32);
         let public_exponent = generator.modpow(&private_key, &prime);
@@ -42,6 +45,7 @@ impl PrivateKey {
 
     /// Generate a new ElGamal keypair
     pub fn generate() -> Self {
+        #[cfg(feature = "tracing")]
         debug!("Generating new ElGamal keypair");
 
         PrivateKey::from(BigUint::from_bytes_be(&get_secure_random_bytes()))
@@ -49,11 +53,12 @@ impl PrivateKey {
 
     /// Export the private key as a base64-encoded string
     pub fn get_encoded_private_key(&self) -> String {
-        STANDARD.encode(&self.private_key.to_bytes_le())
+        STANDARD.encode(self.private_key.to_bytes_le())
     }
 
     /// Decrypt an ElGamal ciphertext
     pub fn decrypt(&self, ciphertext: &Ciphertext) -> Result<BigUint, CryptoError> {
+        #[cfg(feature = "tracing")]
         debug!("Decrypting ElGamal ciphertext");
 
         // Compute s = c1^x mod p
@@ -61,11 +66,10 @@ impl PrivateKey {
             .c1
             .modpow(&self.private_key, &self.public_key.prime);
 
-        // Compute s^(-1) mod p
-        let s_inv = s.modpow(
-            &(self.public_key.prime.clone() - BigUint::from(2u32)),
-            &self.public_key.prime,
-        );
+        // Compute modular inverse s^(-1) mod p using mod_inverse function
+        let s_inv = s
+            .modinv(&self.public_key.prime)
+            .ok_or(CryptoError::InvalidCiphertext)?;
 
         // Recover message m = c2 * s^(-1) mod p
         let m = (ciphertext.c2.clone() * s_inv).rem(&self.public_key.prime);
@@ -88,10 +92,12 @@ impl PublicKey {
     /// Encrypt a message using ElGamal encryption
     pub fn encrypt(&self, message: &BigUint) -> Result<Ciphertext, CryptoError> {
         if message >= &self.prime {
+            #[cfg(feature = "tracing")]
             error!("Message is too large: {}", message);
             return Err(CryptoError::InvalidCiphertext);
         }
 
+        #[cfg(feature = "tracing")]
         debug!("Encrypting message with ElGamal");
 
         let random_biguint = BigUint::from_bytes_be(&get_secure_random_bytes());
@@ -112,7 +118,7 @@ impl PublicKey {
 
     /// Export the public key as a base64-encoded string
     pub fn get_encoded_public_key(&self) -> String {
-        STANDARD.encode(&self.public_exponent.to_bytes_le())
+        STANDARD.encode(self.public_exponent.to_bytes_le())
     }
 }
 

@@ -3,6 +3,7 @@ use crate::types::{Ciphertext, PrivateKey};
 
 use num_bigint::BigUint;
 
+#[cfg(feature = "tracing")]
 use tracing::{debug, error};
 
 /// Encrypt a string using ElGamal encryption.
@@ -17,10 +18,11 @@ use tracing::{debug, error};
 /// # Returns
 ///
 /// * `Vec<u8>` - The encrypted data
-pub fn encrypt(input: String, private_key: &PrivateKey) -> Vec<u8> {
-    debug!("Encrypting string with length {}", input.len());
+pub fn encrypt<T: AsRef<[u8]>>(input: T, private_key: &PrivateKey) -> Vec<u8> {
+    let bytes = input.as_ref();
 
-    let bytes = input.into_bytes();
+    #[cfg(feature = "tracing")]
+    debug!("Encrypting string with length {}", bytes.len());
 
     let mut chunks = Vec::new();
     for chunk in bytes.chunks(4) {
@@ -31,6 +33,7 @@ pub fn encrypt(input: String, private_key: &PrivateKey) -> Vec<u8> {
         chunks.push(value);
     }
 
+    #[cfg(feature = "tracing")]
     debug!("Split string into {} chunks", chunks.len());
 
     let ciphertexts: Vec<Ciphertext> = chunks
@@ -62,6 +65,7 @@ pub fn encrypt(input: String, private_key: &PrivateKey) -> Vec<u8> {
         result.extend_from_slice(&c2_bytes);
     }
 
+    #[cfg(feature = "tracing")]
     debug!("Encryption completed: {} bytes of ciphertext", result.len());
 
     result
@@ -78,14 +82,18 @@ pub fn encrypt(input: String, private_key: &PrivateKey) -> Vec<u8> {
 ///
 /// * `String` - The decrypted string
 pub fn decrypt(data: Vec<u8>, private_key: &PrivateKey) -> Result<String, CryptoError> {
+    #[cfg(feature = "tracing")]
     debug!("Decrypting blob with length {}", data.len());
 
     if data.len() < 4 {
+        #[cfg(feature = "tracing")]
         error!("Data is too short to be valid");
         return Err(CryptoError::InvalidCiphertext);
     }
 
     let count = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
+
+    #[cfg(feature = "tracing")]
     debug!("Found {} encrypted chunks", count);
 
     let mut offset = 4;
@@ -94,6 +102,7 @@ pub fn decrypt(data: Vec<u8>, private_key: &PrivateKey) -> Result<String, Crypto
     // Read each ciphertext
     for _ in 0..count {
         if offset + 8 > data.len() {
+            #[cfg(feature = "tracing")]
             error!("Invalid ciphertext format at offset {}", offset);
             return Err(CryptoError::InvalidCiphertext);
         }
@@ -107,6 +116,7 @@ pub fn decrypt(data: Vec<u8>, private_key: &PrivateKey) -> Result<String, Crypto
         offset += 4;
 
         if offset + c1_len + 4 > data.len() {
+            #[cfg(feature = "tracing")]
             error!("Invalid ciphertext format at offset {}", offset);
             return Err(CryptoError::InvalidCiphertext);
         }
@@ -125,6 +135,7 @@ pub fn decrypt(data: Vec<u8>, private_key: &PrivateKey) -> Result<String, Crypto
         offset += 4;
 
         if offset + c2_len > data.len() {
+            #[cfg(feature = "tracing")]
             error!("Invalid ciphertext format at offset {}", offset);
             return Err(CryptoError::InvalidCiphertext);
         }
@@ -156,10 +167,12 @@ pub fn decrypt(data: Vec<u8>, private_key: &PrivateKey) -> Result<String, Crypto
 
     match String::from_utf8(bytes) {
         Ok(string) => {
+            #[cfg(feature = "tracing")]
             debug!("Decryption completed successfully");
             Ok(string)
         }
         Err(e) => {
+            #[cfg(feature = "tracing")]
             error!("Failed to decode decrypted data: {}", e);
             Err(CryptoError::DecodeDecryptedMessage)
         }

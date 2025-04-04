@@ -3,16 +3,27 @@ name = "crypto"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["std"]
+std = []
+
+serde = ["dep:serde", "num-bigint/serde"]
+tracing = ["dep:tracing"]
+
 [dependencies]
-rand = "0.9.0"
-thiserror = "2.0.12"
-tracing = "0.1.40"
 num-bigint = "0.4.4"
 num-traits = "0.2.17"
+
 ring = "0.17.7"
 base64 = "0.22.1"
 
+serde = { version = "1.0.219", features = ["derive"], optional = true }
+
+thiserror = "2.0.12"
+tracing = { version = "0.1.40", optional = true }
+
 [dev-dependencies]
+rand = "0.9.0"
 fake = "4.2.0"
 quickcheck = "1.0.3"
 quickcheck_macros = "1.0.0"

@@ -100,6 +100,10 @@ impl UserSchema {
         &self.email
     }
 
+    fn private_key(&self) -> &str {
+        &self.private_key
+    }
+
     async fn blobs(&self, context: &Context) -> FieldResult<Vec<BlobSchema>> {
         let Some(current_user) = context.current_user() else {
             return Err("Authentication required".into());

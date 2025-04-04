@@ -11,7 +11,7 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use sqlx::{Connection, Executor, Pool, Sqlite, SqlitePool};
+use sqlx::{Pool, Sqlite, SqlitePool};
 
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
