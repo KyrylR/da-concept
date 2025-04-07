@@ -55,3 +55,7 @@ peers.
 
 Currently, the system is in the alpha stage. Due to time constraints, a developer-ready setup for the node cannot be
 provided at the moment.
+
+## Resources
+
+Rust Forum link: https://users.rust-lang.org/t/data-availability-system/127973
